@@ -5,7 +5,7 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from dotenv import load_dotenv
 
-from src.lyrics_fetcher import fetch_album_lyrics
+from src.lyrics_fetcher import fetch_single_song
 from src.remixer import generate_remixed_song
 from src.music_generator import generate_and_download
 from src.voice import guess_vocal_gender
@@ -20,7 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
-    """Parse user input to extract album, artist, optional style, and optional vocal gender."""
+    """Parse user input to extract song, artist, optional style, and optional vocal gender."""
     user_input = user_input.strip()
     style = "pop, catchy"
     vocal_gender = None
@@ -60,7 +60,7 @@ def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
         album = parts[1].strip()
     else:
         raise ValueError(
-            "Please use format: 'Album by Artist' or 'Album - Artist'"
+            "Please use format: 'Song by Artist' or 'Song - Artist'"
         )
 
     return album, artist, style, vocal_gender
@@ -83,11 +83,11 @@ def remix():
         # Parse input
         album, artist, style, vocal_gender_hint = parse_user_input(user_input)
 
-        # Fetch lyrics
-        album_data = fetch_album_lyrics(artist, album)
+        # Fetch lyrics for the song
+        song_data = fetch_single_song(artist, album)
 
         # Generate song
-        song = generate_remixed_song(album_data, style_hint=style)
+        song = generate_remixed_song(song_data, style_hint=style)
 
         # Decide vocal gender (heuristic + optional hint)
         vocal_gender = guess_vocal_gender(artist, hint=vocal_gender_hint)
@@ -109,8 +109,8 @@ def remix():
             "title": song["title"],
             "mood": song["mood"],
             "audio_url": f"/audio/{audio_filename}",
-            "tracks_found": album_data["track_count"],
-            "themes": album_data["themes"][:10]
+            "source_song": f"{song_data['song']} by {song_data['artist']}",
+            "themes": song_data["themes"][:10]
         })
 
     except ValueError as e:

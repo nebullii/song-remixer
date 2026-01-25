@@ -81,11 +81,9 @@ def scrape_lyrics(song_url: str) -> str:
 
 
 def fetch_album_lyrics(artist_name: str, album_name: str) -> dict:
-    """
-    Fetch lyrics for songs from an album/artist.
-
-    Since Genius API doesn't have album endpoints for all cases,
-    we search for songs matching the album and artist.
+    """Fetch lyrics for songs from an album/artist.
+    
+    DEPRECATED: Use fetch_single_song for faster processing.
     """
     # Search for songs with album name + artist
     query = f"{album_name} {artist_name}"
@@ -147,6 +145,68 @@ def fetch_album_lyrics(artist_name: str, album_name: str) -> dict:
         "album": album_name,
         "track_count": len(tracks),
         "tracks": tracks,
+        "vocabulary": list(set(all_words)),
+        "themes": themes
+    }
+
+
+def fetch_single_song(artist_name: str, song_title: str) -> dict:
+    """Fetch lyrics for a single song by title and artist. Much faster than fetching an entire album."""
+    query = f"{song_title} {artist_name}"
+    songs = search_songs(query, per_page=10)
+
+    if not songs:
+        raise ValueError(f"No songs found for '{song_title}' by '{artist_name}'")
+
+    # Find the best matching song
+    artist_lower = artist_name.lower()
+    song_lower = song_title.lower()
+    
+    best_match = None
+    for song in songs:
+        if (artist_lower in song["primary_artist"]["name"].lower() and 
+            song_lower in song["title"].lower()):
+            best_match = song
+            break
+    
+    if not best_match:
+        # Fall back to first result
+        best_match = songs[0]
+    
+    print(f"  Fetching: {best_match['title']} by {best_match['primary_artist']['name']}")
+    lyrics = scrape_lyrics(best_match["url"])
+    
+    if not lyrics:
+        raise ValueError(f"Could not fetch lyrics for '{song_title}'")
+    
+    lyrics = clean_lyrics(lyrics)
+    all_words = extract_words(lyrics)
+    word_counts = Counter(all_words)
+    
+    stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+                 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+                 'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+                 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him',
+                 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our',
+                 'their', 'this', 'that', 'these', 'those', 'and', 'but',
+                 'or', 'so', 'if', 'then', 'than', 'when', 'where', 'what',
+                 'who', 'which', 'how', 'why', 'all', 'each', 'every', 'both',
+                 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'not',
+                 'only', 'own', 'same', 'just', 'can', 'now', 'to', 'of',
+                 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'up', 'about',
+                 'into', 'over', 'after', 'like', 'get', 'got', 'go', 'going',
+                 'gone', 'come', 'came', 'know', 'see', 'want', 'dont', "don't",
+                 'im', "i'm", 'ive', "i've", 'youre', "you're", 'its', "it's",
+                 'oh', 'yeah', 'ya', 'na', 'la', 'da', 'uh', 'ah', 'ooh', 'hey'}
+    
+    themes = [word for word, _ in word_counts.most_common(100)
+              if word.lower() not in stopwords and len(word) > 2][:30]
+    
+    return {
+        "artist": best_match["primary_artist"]["name"],
+        "song": best_match["title"],
+        "track_count": 1,
+        "tracks": [{"title": best_match["title"], "lyrics": lyrics}],
         "vocabulary": list(set(all_words)),
         "themes": themes
     }

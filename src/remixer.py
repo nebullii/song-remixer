@@ -12,19 +12,22 @@ def get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-def generate_remixed_song(album_data: dict, style_hint: str = None) -> dict:
+def generate_remixed_song(song_data: dict, style_hint: str = None) -> dict:
     """
-    Generate an original song inspired by the album's vocabulary and themes.
+    Generate an original song inspired by the source song's vocabulary and themes.
     """
     client = get_client()
 
-    themes = ", ".join(album_data["themes"][:20])
-    vocab_sample = ", ".join(album_data["vocabulary"][:50])
-    track_titles = [t["title"] for t in album_data["tracks"]]
+    themes = ", ".join(song_data["themes"][:20])
+    vocab_sample = ", ".join(song_data["vocabulary"][:50])
+    
+    # Handle both single song and album data structures
+    source_name = song_data.get("song") or song_data.get("album", "Unknown")
+    artist_name = song_data["artist"]
 
     style_instruction = f"\nStyle hint: {style_hint}" if style_hint else ""
 
-    prompt = f"""You are a professional songwriter writing lyrics for a POP SONG (not a poem). Create an ORIGINAL song inspired by "{album_data['album']}" by {album_data['artist']}.
+    prompt = f"""You are a professional songwriter writing lyrics for a POP SONG (not a poem). Create an ORIGINAL song inspired by "{source_name}" by {artist_name}.
 
 Key themes: {themes}
 Sample vocabulary: {vocab_sample}
