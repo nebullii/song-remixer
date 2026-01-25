@@ -54,7 +54,7 @@ def parse_user_input(user_input: str) -> tuple[str, str, str]:
     return album, artist, style
 
 
-def process_request(album: str, artist: str, style: str, use_tts: bool = True):
+def process_request(album: str, artist: str, style: str):
     """Process the remix request and return the audio path."""
     with Progress(
         SpinnerColumn(),
@@ -81,21 +81,23 @@ def process_request(album: str, artist: str, style: str, use_tts: bool = True):
         # Display lyrics
         console.print(Panel(song["lyrics"], title=song["title"], border_style="blue"))
 
-        # Step 3: Generate audio
-        if use_tts:
-            from .tts import generate_song_audio
-            task = progress.add_task("Generating audio...", total=None)
-            audio_path = generate_song_audio(song)
-            progress.remove_task(task)
-        else:
-            from .music_generator import generate_and_download
-            progress.stop()
-            console.print("\n[yellow]Generating music with Suno AI...[/yellow]")
-            audio_path = generate_and_download(
-                lyrics=song["lyrics"],
-                title=song["title"],
-                style=style
-            )
+        # Step 3: Generate audio with AI music and singing
+        from .music_generator import generate_and_download
+        from .voice import guess_vocal_gender
+        progress.stop()
+        console.print("\n[yellow]Generating music with AI (singing on beat)...[/yellow]")
+        
+        # Guess vocal gender from artist name
+        vocal_gender = guess_vocal_gender(artist)
+        
+        audio_path = generate_and_download(
+            lyrics=song["lyrics"],
+            title=song["title"],
+            style=style,
+            mood=song.get("mood", "energetic"),
+            vocal_gender=vocal_gender,
+            singing_method="bark"  # Use Bark for actual singing vocals + instrumental
+        )
 
     return audio_path
 
@@ -153,7 +155,7 @@ def main():
             console.print(f"\n[bold magenta]Song Remixer[/bold magenta]: Got it! Creating a song inspired by [bold]{album}[/bold] by [bold]{artist}[/bold]...\n")
 
             # Process and generate
-            audio_path = process_request(album, artist, style, use_tts=True)
+            audio_path = process_request(album, artist, style)
 
             # Reply with the audio
             play_audio(audio_path)

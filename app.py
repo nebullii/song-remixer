@@ -92,14 +92,15 @@ def remix():
         # Decide vocal gender (heuristic + optional hint)
         vocal_gender = guess_vocal_gender(artist, hint=vocal_gender_hint)
 
-        # Generate vocals + instrumental music
+        # Generate vocals + instrumental music (singing on beat)
         audio_path = generate_and_download(
             lyrics=song["lyrics"],
             title=song["title"],
             style=style,
             mood=song["mood"],
             vocal_gender=vocal_gender,
-            output_dir=OUTPUT_DIR
+            output_dir=OUTPUT_DIR,
+            singing_method="bark"  # Use Bark for actual singing vocals + instrumental
         )
         audio_filename = os.path.basename(audio_path)
 
