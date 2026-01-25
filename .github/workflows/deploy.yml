@@ -1,0 +1,60 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - deployment  # Triggers on push to deployment branch
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+
+env:
+  PROJECT_ID: glassy-keyword-474117-j6
+  REGION: us-central1
+  SERVICE_NAME: song-remixer
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+      
+      - name: Build and push Docker image
+        run: |
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+      
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --memory 2Gi \
+            --cpu 1 \
+            --timeout 600 \
+            --max-instances 10 \
+            --set-env-vars "FAST_MODE=true" \
+            --set-env-vars "REPLICATE_API_TOKEN=${{ secrets.REPLICATE_API_TOKEN }}" \
+            --set-env-vars "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" \
+            --set-env-vars "GENIUS_ACCESS_TOKEN=${{ secrets.GENIUS_ACCESS_TOKEN }}"
+      
+      - name: Show deployment URL
+        run: |
+          echo "Deployment successful!"
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format 'value(status.url)'
