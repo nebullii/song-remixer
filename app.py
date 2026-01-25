@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 
 from src.lyrics_fetcher import fetch_song_lyrics
 from src.remixer import generate_remixed_song
-from src.tts import generate_song_audio  # Fast TTS (no Replicate)
-from src.music_generator import generate_and_download as music_generate  # Full generation
+from src.quick_generator import generate_quick_song  # TTS + single instrumental (~1 min)
+from src.tts import generate_song_audio  # TTS only, no music (~5 sec)
+from src.music_generator import generate_and_download as music_generate  # Full Bark+MusicGen (~5 min)
 
 load_dotenv()
 
@@ -96,15 +97,17 @@ def remix():
         song = generate_remixed_song(song_data, style_hint=style)
 
         # Step 3: Generate audio
-        # FAST_MODE=true (default) = Edge TTS only (~5 seconds, sounds like reading)
-        # FAST_MODE=false = Full Bark+MusicGen (~5+ minutes, has music)
-        fast_mode = os.getenv("FAST_MODE", "true").lower() == "true"
+        # AUDIO_MODE: "quick" (default), "fast", or "full"
+        #   quick = Edge TTS + single MusicGen instrumental (~1 min)
+        #   fast  = Edge TTS only, no music (~5 sec)
+        #   full  = Bark + MusicGen per section (~5+ min)
+        audio_mode = os.getenv("AUDIO_MODE", "quick").lower()
 
-        if fast_mode:
-            print(f"Generating audio with Edge TTS (fast mode ~5 sec)...")
+        if audio_mode == "fast":
+            print(f"Generating with Edge TTS only (no music, ~5 sec)...")
             audio_path = generate_song_audio(song, output_dir=OUTPUT_DIR)
-        else:
-            print(f"Generating with Bark + MusicGen (slow ~5 min)...")
+        elif audio_mode == "full":
+            print(f"Generating with Bark + MusicGen (slow, ~5 min)...")
             audio_path = music_generate(
                 lyrics=song["lyrics"],
                 title=song["title"],
@@ -114,6 +117,15 @@ def remix():
                 output_dir=OUTPUT_DIR,
                 add_harmonies=False,
                 add_intro_outro=False,
+            )
+        else:  # quick (default)
+            print(f"Generating with Edge TTS + MusicGen (~1 min)...")
+            audio_path = generate_quick_song(
+                lyrics=song["lyrics"],
+                title=song["title"],
+                style=style,
+                mood=song["mood"],
+                output_dir=OUTPUT_DIR,
             )
         audio_filename = os.path.basename(audio_path)
 

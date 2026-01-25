@@ -1,0 +1,50 @@
+# .gcloudignore - Files to exclude from Cloud Build
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Output files
+output/
+*.mp3
+*.wav
+
+# Environment
+.env
+.env.local
+
+# Documentation
+README.md
+CLAUDE.md
+DEBUG.md
+*.md
+
+# Test files
+test_*.py
+quick_test.py
+
+# Brain artifacts
+.gemini/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
