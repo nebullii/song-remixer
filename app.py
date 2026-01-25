@@ -5,10 +5,10 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from dotenv import load_dotenv
 
-from src.lyrics_fetcher import fetch_album_lyrics
+from src.lyrics_fetcher import fetch_song_lyrics
 from src.remixer import generate_remixed_song
-from src.music_generator import generate_and_download
-from src.voice import guess_vocal_gender
+from src.tts import generate_song_audio  # Fast TTS (no Replicate)
+from src.music_generator import generate_and_download as music_generate  # Full generation
 
 load_dotenv()
 
@@ -20,8 +20,12 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
-    """Parse user input to extract album, artist, optional style, and optional vocal gender."""
+    """Parse user input to extract song name, artist, optional style, and optional vocal gender."""
+    # Sanitize input - remove quotes and extra whitespace
     user_input = user_input.strip()
+    user_input = user_input.replace('"', '').replace("'", '').replace('"', '').replace('"', '')
+    user_input = re.sub(r'\s+', ' ', user_input)  # Normalize whitespace
+    
     style = "pop, catchy"
     vocal_gender = None
 
@@ -48,22 +52,22 @@ def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
     # Try different separators
     if " by " in user_input.lower():
         idx = user_input.lower().index(" by ")
-        album = user_input[:idx].strip()
+        song_name = user_input[:idx].strip()
         artist = user_input[idx + 4:].strip()
     elif " - " in user_input:
         parts = user_input.split(" - ", 1)
-        album = parts[0].strip()
+        song_name = parts[0].strip()
         artist = parts[1].strip()
     elif ": " in user_input:
         parts = user_input.split(": ", 1)
         artist = parts[0].strip()
-        album = parts[1].strip()
+        song_name = parts[1].strip()
     else:
         raise ValueError(
-            "Please use format: 'Album by Artist' or 'Album - Artist'"
+            "Please use format: 'Song by Artist' or 'Song - Artist'"
         )
 
-    return album, artist, style, vocal_gender
+    return song_name, artist, style, vocal_gender
 
 
 @app.route("/")
@@ -77,30 +81,40 @@ def remix():
     user_input = data.get("message", "")
 
     if not user_input:
-        return jsonify({"error": "Please enter an album name"}), 400
+        return jsonify({"error": "Please enter a song name"}), 400
 
     try:
         # Parse input
-        album, artist, style, vocal_gender_hint = parse_user_input(user_input)
+        song_name, artist, style, vocal_gender = parse_user_input(user_input)
 
-        # Fetch lyrics
-        album_data = fetch_album_lyrics(artist, album)
+        # Step 1: Fetch lyrics (single song)
+        print(f"Fetching lyrics for '{song_name} by {artist}'...")
+        song_data = fetch_song_lyrics(artist, song_name)
 
-        # Generate song
-        song = generate_remixed_song(album_data, style_hint=style)
+        # Step 2: Generate new lyrics with Claude
+        print(f"Generating new song with Claude...")
+        song = generate_remixed_song(song_data, style_hint=style)
 
-        # Decide vocal gender (heuristic + optional hint)
-        vocal_gender = guess_vocal_gender(artist, hint=vocal_gender_hint)
+        # Step 3: Generate audio
+        # FAST_MODE=true (default) = Edge TTS only (~5 seconds, sounds like reading)
+        # FAST_MODE=false = Full Bark+MusicGen (~5+ minutes, has music)
+        fast_mode = os.getenv("FAST_MODE", "true").lower() == "true"
 
-        # Generate vocals + instrumental music
-        audio_path = generate_and_download(
-            lyrics=song["lyrics"],
-            title=song["title"],
-            style=style,
-            mood=song["mood"],
-            vocal_gender=vocal_gender,
-            output_dir=OUTPUT_DIR
-        )
+        if fast_mode:
+            print(f"Generating audio with Edge TTS (fast mode ~5 sec)...")
+            audio_path = generate_song_audio(song, output_dir=OUTPUT_DIR)
+        else:
+            print(f"Generating with Bark + MusicGen (slow ~5 min)...")
+            audio_path = music_generate(
+                lyrics=song["lyrics"],
+                title=song["title"],
+                style=style,
+                mood=song["mood"],
+                vocal_gender=vocal_gender,
+                output_dir=OUTPUT_DIR,
+                add_harmonies=False,
+                add_intro_outro=False,
+            )
         audio_filename = os.path.basename(audio_path)
 
         return jsonify({
@@ -108,13 +122,16 @@ def remix():
             "title": song["title"],
             "mood": song["mood"],
             "audio_url": f"/audio/{audio_filename}",
-            "tracks_found": album_data["track_count"],
-            "themes": album_data["themes"][:10]
+            "source_song": song_data["tracks"][0]["title"] if song_data["tracks"] else song_name,
+            "themes": song_data["themes"][:10]
         })
 
     except ValueError as e:
+        print(f"ValueError: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Something went wrong: {str(e)}"}), 500
 
 
