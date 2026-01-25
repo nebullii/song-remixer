@@ -24,24 +24,56 @@ def generate_remixed_song(album_data: dict, style_hint: str = None) -> dict:
 
     style_instruction = f"\nStyle hint: {style_hint}" if style_hint else ""
 
-    prompt = f"""You are a creative songwriter. Create an ORIGINAL song inspired by the vocabulary and themes from "{album_data['album']}" by {album_data['artist']}.
+    prompt = f"""You are a professional songwriter writing lyrics for a POP SONG (not a poem). Create an ORIGINAL song inspired by "{album_data['album']}" by {album_data['artist']}.
 
 Key themes: {themes}
 Sample vocabulary: {vocab_sample}
-Original track titles: {', '.join(track_titles)}
 {style_instruction}
 
-IMPORTANT:
-- Create completely ORIGINAL lyrics - do not copy existing lyrics
-- Use themes and vocabulary as INSPIRATION only
-- Include clear verse/chorus structure
-- Make it emotional and singable
+CRITICAL SONG STRUCTURE REQUIREMENTS:
+1. Write a SONG, not a poem. Songs have:
+   - A catchy, memorable CHORUS that repeats 2-3 times (this is the hook!)
+   - Short, punchy lines (4-8 words per line typically)
+   - Repetition of key phrases and the title
+   - Rhythm that can be sung to a beat
+
+2. Use this EXACT structure:
+   [Verse 1] - 4-6 lines, sets up the story
+   [Chorus] - 4-6 lines, catchy hook with the song title, REPEATABLE
+   [Verse 2] - 4-6 lines, develops the story
+   [Chorus] - repeat the same chorus
+   [Bridge] - 2-4 lines, emotional shift
+   [Chorus] - repeat the same chorus again
+
+3. The CHORUS must:
+   - Be the same lyrics each time it appears
+   - Include the song title
+   - Be catchy and memorable
+   - Use simple, singable words
+
+4. Keep lines SHORT and rhythmic. Think radio pop songs, not Shakespeare.
 
 Format your response EXACTLY as:
-TITLE: [Your song title]
+TITLE: [Your catchy song title]
 MOOD: [One word: energetic/melancholic/dreamy/intense/hopeful/nostalgic]
 
-[Your original lyrics with verse/chorus labels]
+[Verse 1]
+(your lyrics)
+
+[Chorus]
+(your catchy, repeatable hook)
+
+[Verse 2]
+(your lyrics)
+
+[Chorus]
+(same chorus lyrics repeated)
+
+[Bridge]
+(your lyrics)
+
+[Chorus]
+(same chorus lyrics repeated)
 """
 
     response = client.messages.create(

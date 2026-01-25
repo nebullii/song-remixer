@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Song Remixer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            padding: 2rem;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #8892b0;
+            font-size: 1.1rem;
+        }
+
+        .chat-container {
+            flex: 1;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 85%;
+            padding: 1rem 1.25rem;
+            border-radius: 1rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: #4a5568;
+            color: white;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .message.bot {
+            align-self: flex-start;
+            background: #2d3748;
+            color: white;
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        .message.bot.error {
+            background: #742a2a;
+            border-left: 3px solid #fc8181;
+        }
+
+        .message .title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #feca57;
+        }
+
+        .message .meta {
+            font-size: 0.85rem;
+            color: #a0aec0;
+            margin-bottom: 1rem;
+        }
+
+        .message .lyrics {
+            background: #1a202c;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            white-space: pre-wrap;
+            font-family: 'Georgia', serif;
+            line-height: 1.8;
+            margin: 1rem 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .message audio {
+            width: 100%;
+            margin-top: 1rem;
+            border-radius: 0.5rem;
+        }
+
+        .typing {
+            display: flex;
+            gap: 0.3rem;
+            padding: 1rem;
+        }
+
+        .typing span {
+            width: 8px;
+            height: 8px;
+            background: #feca57;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .input-area {
+            padding: 1rem 0 2rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            border: none;
+            border-radius: 2rem;
+            background: #2d3748;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: box-shadow 0.2s;
+        }
+
+        .input-area input:focus {
+            box-shadow: 0 0 0 2px #feca57;
+        }
+
+        .input-area input::placeholder {
+            color: #718096;
+        }
+
+        .input-area button {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 2rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57);
+            color: #1a1a2e;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .input-area button:hover {
+            transform: scale(1.05);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .hint {
+            text-align: center;
+            color: #4a5568;
+            font-size: 0.9rem;
+            padding-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Song Remixer</h1>
+        <p>Tell me an album and I'll create an original song inspired by it</p>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="message bot">
+                Hey! Give me an album name and artist, and I'll create a brand new song inspired by it.<br><br>
+                <strong>Try:</strong> "Thriller by Michael Jackson" or "21 - Adele"<br>
+                <em>Add a style or voice:</em> "Abbey Road by The Beatles (psychedelic rock)" or "25 by Adele (female)"
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Enter album by artist (optional: style, female/male)..." autofocus>
+            <button id="sendBtn" onclick="sendMessage()">Create</button>
+        </div>
+        <p class="hint">Press Enter to send</p>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !sendBtn.disabled) {
+                sendMessage();
+            }
+        });
+
+        function addMessage(content, isUser = false, isError = false) {
+            const msg = document.createElement('div');
+            msg.className = `message ${isUser ? 'user' : 'bot'}${isError ? ' error' : ''}`;
+            msg.innerHTML = content;
+            messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return msg;
+        }
+
+        function addTypingIndicator() {
+            const typing = document.createElement('div');
+            typing.className = 'message bot';
+            typing.id = 'typing';
+            typing.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>Creating your song...';
+            messagesDiv.appendChild(typing);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const typing = document.getElementById('typing');
+            if (typing) typing.remove();
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, true);
+            userInput.value = '';
+
+            // Disable input while processing
+            sendBtn.disabled = true;
+            userInput.disabled = true;
+
+            // Show typing indicator
+            addTypingIndicator();
+
+            try {
+                const response = await fetch('/api/remix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+                removeTypingIndicator();
+
+                if (data.error) {
+                    addMessage(data.error, false, true);
+                } else {
+                    const content = `
+                        <div class="title">${data.title}</div>
+                        <div class="meta">
+                            Mood: ${data.mood} | Found ${data.tracks_found} tracks<br>
+                            Themes: ${data.themes.join(', ')}
+                        </div>
+                        <audio controls autoplay>
+                            <source src="${data.audio_url}" type="audio/mpeg">
+                        </audio>
+                    `;
+                    addMessage(content);
+                }
+            } catch (err) {
+                removeTypingIndicator();
+                addMessage('Failed to connect to server. Please try again.', false, true);
+            }
+
+            // Re-enable input
+            sendBtn.disabled = false;
+            userInput.disabled = false;
+            userInput.focus();
+        }
+    </script>
+</body>
+</html>
