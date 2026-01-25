@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Song Remixer</title>
+    <title>Song Creator</title>
     <style>
         * {
             margin: 0;
@@ -200,21 +200,21 @@
 </head>
 <body>
     <div class="header">
-        <h1>Song Remixer</h1>
-        <p>Tell me an album and I'll create an original song inspired by it</p>
+        <h1>Song Creator</h1>
+        <p>Tell me a song and I'll create an original song inspired by it</p>
     </div>
 
     <div class="chat-container">
         <div class="messages" id="messages">
             <div class="message bot">
-                Hey! Give me an album name and artist, and I'll create a brand new song inspired by it.<br><br>
-                <strong>Try:</strong> "Thriller by Michael Jackson" or "21 - Adele"<br>
-                <em>Add a style or voice:</em> "Abbey Road by The Beatles (psychedelic rock)" or "25 by Adele (female)"
+                Hey! Give me a song name and artist, and I'll create a brand new song inspired by it.<br><br>
+                <strong>Try:</strong> "Billie Jean by Michael Jackson" or "Bohemian Rhapsody - Queen"<br>
+                <em>Add a style or voice:</em> "Stairway to Heaven by Led Zeppelin (rock, epic)" or "Rolling in the Deep by Adele (female, soulful)"
             </div>
         </div>
 
         <div class="input-area">
-            <input type="text" id="userInput" placeholder="Enter album by artist (optional: style, female/male)..." autofocus>
+            <input type="text" id="userInput" placeholder="Enter song by artist (optional: style, female/male)..." autofocus>
             <button id="sendBtn" onclick="sendMessage()">Create</button>
         </div>
         <p class="hint">Press Enter to send</p>
@@ -285,7 +285,7 @@
                     const content = `
                         <div class="title">${data.title}</div>
                         <div class="meta">
-                            Mood: ${data.mood} | Found ${data.tracks_found} tracks<br>
+                            Mood: ${data.mood} | Inspired by: ${data.source_song}<br>
                             Themes: ${data.themes.join(', ')}
                         </div>
                         <audio controls autoplay>
