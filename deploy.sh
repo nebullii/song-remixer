@@ -28,21 +28,13 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" &> /dev/n
     exit 1
 fi
 
-# Check for required environment variables
-if [ -z "$REPLICATE_API_TOKEN" ]; then
-    echo "⚠️  Warning: REPLICATE_API_TOKEN not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "⚠️  Warning: ANTHROPIC_API_KEY not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
-
-if [ -z "$GENIUS_ACCESS_TOKEN" ]; then
-    echo "⚠️  Warning: GENIUS_ACCESS_TOKEN not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
+# Check for required secrets (Secret Manager)
+for secret in replicate-api-token anthropic-api-key genius-access-token; do
+    if ! gcloud secrets describe "$secret" >/dev/null 2>&1; then
+        echo "⚠️  Warning: Secret '$secret' not found in Secret Manager"
+        echo "You'll need to create it before the app can access that API"
+    fi
+done
 
 echo ""
 echo "📋 Deployment Configuration:"
@@ -86,9 +78,9 @@ gcloud run deploy $SERVICE_NAME \
     --timeout 600 \
     --max-instances 10 \
     --set-env-vars "FAST_MODE=true" \
-    --set-env-vars "REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}" \
-    --set-env-vars "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" \
-    --set-env-vars "GENIUS_ACCESS_TOKEN=${GENIUS_ACCESS_TOKEN:-}"
+    --set-secrets "REPLICATE_API_TOKEN=replicate-api-token:latest" \
+    --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
+    --set-secrets "GENIUS_ACCESS_TOKEN=genius-access-token:latest"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)')
