@@ -9,22 +9,31 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
 
-from .lyrics_fetcher import fetch_single_song
+from .lyrics_fetcher import fetch_album_lyrics, fetch_song_lyrics
 from .remixer import generate_remixed_song
 
 console = Console()
 
 
-def parse_user_input(user_input: str) -> tuple[str, str, str]:
-    """Parse user input to extract song, artist, and optional style.
+def parse_user_input(user_input: str) -> tuple[str, str, str, bool]:
+    """Parse user input to extract song/album, artist, style, and mode.
 
     Supports formats:
-    - "Song by Artist"
+    - "Song by Artist" (default - single song, fast)
+    - "album: Album by Artist" (full album mode)
     - "Song - Artist"
     - "Artist: Song"
+
+    Returns: (name, artist, style, is_album_mode)
     """
     user_input = user_input.strip()
     style = "pop, catchy"
+    is_album = False
+
+    # Check for album mode prefix
+    if user_input.lower().startswith("album:"):
+        is_album = True
+        user_input = user_input[6:].strip()
 
     # Check for style hints in parentheses at the end
     if "(" in user_input and user_input.endswith(")"):
@@ -35,26 +44,27 @@ def parse_user_input(user_input: str) -> tuple[str, str, str]:
     # Try different separators
     if " by " in user_input.lower():
         idx = user_input.lower().index(" by ")
-        album = user_input[:idx].strip()
+        name = user_input[:idx].strip()
         artist = user_input[idx + 4:].strip()
     elif " - " in user_input:
         parts = user_input.split(" - ", 1)
-        album = parts[0].strip()
+        name = parts[0].strip()
         artist = parts[1].strip()
     elif ": " in user_input:
         parts = user_input.split(": ", 1)
         artist = parts[0].strip()
-        album = parts[1].strip()
+        name = parts[1].strip()
     else:
         raise ValueError(
-            "Please use format: 'Song by Artist' or 'Song - Artist'\n"
-            "Example: 'Billie Jean by Michael Jackson'"
+            "Please use format: 'Song by Artist'\n"
+            "Example: 'Billie Jean by Michael Jackson'\n"
+            "For album mode: 'album: Thriller by Michael Jackson'"
         )
 
-    return album, artist, style
+    return name, artist, style, is_album
 
 
-def process_request(album: str, artist: str, style: str):
+def process_request(name: str, artist: str, style: str, use_tts: bool = True, is_album: bool = False):
     """Process the remix request and return the audio path."""
     with Progress(
         SpinnerColumn(),
@@ -62,17 +72,23 @@ def process_request(album: str, artist: str, style: str):
         console=console,
         transient=True
     ) as progress:
-        # Step 1: Fetch lyrics for the song
-        task = progress.add_task("Fetching song lyrics from Genius...", total=None)
-        song_data = fetch_single_song(artist, album)
-        progress.remove_task(task)
+        # Step 1: Fetch lyrics
+        if is_album:
+            task = progress.add_task("Fetching album lyrics from Genius...", total=None)
+            album_data = fetch_album_lyrics(artist, name)
+            progress.remove_task(task)
+            console.print(f"[green]✓[/green] Found {album_data['track_count']} tracks")
+        else:
+            task = progress.add_task("Fetching song lyrics from Genius...", total=None)
+            album_data = fetch_song_lyrics(artist, name)
+            progress.remove_task(task)
+            console.print(f"[green]✓[/green] Found song: {album_data['tracks'][0]['title']}")
 
-        console.print(f"[green]✓[/green] Found: {song_data['song']} by {song_data['artist']}")
-        console.print(f"[dim]Themes: {', '.join(song_data['themes'][:10])}[/dim]\n")
+        console.print(f"[dim]Themes: {', '.join(album_data['themes'][:10])}[/dim]\n")
 
         # Step 2: Generate remixed song lyrics
         task = progress.add_task("Creating your remixed song with AI...", total=None)
-        song = generate_remixed_song(song_data, style_hint=style)
+        song = generate_remixed_song(album_data, style_hint=style)
         progress.remove_task(task)
 
         console.print(f"[green]✓[/green] Generated: [bold]{song['title']}[/bold]")
@@ -81,23 +97,21 @@ def process_request(album: str, artist: str, style: str):
         # Display lyrics
         console.print(Panel(song["lyrics"], title=song["title"], border_style="blue"))
 
-        # Step 3: Generate audio with AI music and singing
-        from .music_generator import generate_and_download
-        from .voice import guess_vocal_gender
-        progress.stop()
-        console.print("\n[yellow]Generating music with AI (singing on beat)...[/yellow]")
-        
-        # Guess vocal gender from artist name
-        vocal_gender = guess_vocal_gender(artist)
-        
-        audio_path = generate_and_download(
-            lyrics=song["lyrics"],
-            title=song["title"],
-            style=style,
-            mood=song.get("mood", "energetic"),
-            vocal_gender=vocal_gender,
-            singing_method="bark"  # Use Bark for actual singing vocals + instrumental
-        )
+        # Step 3: Generate audio
+        if use_tts:
+            from .tts import generate_song_audio
+            task = progress.add_task("Generating audio...", total=None)
+            audio_path = generate_song_audio(song)
+            progress.remove_task(task)
+        else:
+            from .music_generator import generate_and_download
+            progress.stop()
+            console.print("\n[yellow]Generating music with Suno AI...[/yellow]")
+            audio_path = generate_and_download(
+                lyrics=song["lyrics"],
+                title=song["title"],
+                style=style
+            )
 
     return audio_path
 
@@ -127,7 +141,8 @@ def main():
         "Tell me a song and I'll create an original song inspired by it!\n"
         "[dim]Format: Song by Artist[/dim]\n"
         "[dim]Example: Billie Jean by Michael Jackson[/dim]\n"
-        "[dim]Add style: Billie Jean by Michael Jackson (funk, groovy)[/dim]\n\n"
+        "[dim]Add style: Billie Jean by Michael Jackson (80s synth, dark)[/dim]\n"
+        "[dim]For album mode: album: Thriller by Michael Jackson[/dim]\n\n"
         "[dim]Type 'quit' to exit[/dim]",
         title="Welcome"
     ))
@@ -147,15 +162,16 @@ def main():
 
             # Parse the input
             try:
-                album, artist, style = parse_user_input(user_input)
+                name, artist, style, is_album = parse_user_input(user_input)
             except ValueError as e:
                 console.print(f"\n[yellow]Hmm, I didn't quite get that.[/yellow] {e}")
                 continue
 
-            console.print(f"\n[bold magenta]Song Remixer[/bold magenta]: Got it! Creating a song inspired by [bold]{album}[/bold] by [bold]{artist}[/bold]...\n")
+            mode_text = "album" if is_album else "song"
+            console.print(f"\n[bold magenta]Song Remixer[/bold magenta]: Got it! Creating a song inspired by the {mode_text} [bold]{name}[/bold] by [bold]{artist}[/bold]...\n")
 
             # Process and generate
-            audio_path = process_request(album, artist, style)
+            audio_path = process_request(name, artist, style, use_tts=True, is_album=is_album)
 
             # Reply with the audio
             play_audio(audio_path)

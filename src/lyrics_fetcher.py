@@ -98,6 +98,72 @@ def scrape_lyrics(song_url: str) -> str:
     return "\n".join(lyrics_parts)
 
 
+def fetch_song_lyrics(artist_name: str, song_name: str) -> dict:
+    """
+    Fetch lyrics for a single song.
+    Much faster than fetching an entire album.
+    """
+    query = f"{song_name} {artist_name}"
+    songs = search_songs(query, per_page=5)
+
+    if not songs:
+        raise ValueError(f"No songs found for '{song_name}' by '{artist_name}'")
+
+    # Find best match
+    artist_lower = artist_name.lower()
+    song_lower = song_name.lower()
+
+    best_match = None
+    for song in songs:
+        if artist_lower in song["primary_artist"]["name"].lower():
+            if song_lower in song["title"].lower() or song["title"].lower() in song_lower:
+                best_match = song
+                break
+            if not best_match:
+                best_match = song
+
+    if not best_match:
+        best_match = songs[0]
+
+    print(f"  Fetching: {best_match['title']}")
+    lyrics = scrape_lyrics(best_match["url"])
+
+    if not lyrics:
+        raise ValueError(f"Could not fetch lyrics for '{song_name}'")
+
+    lyrics = clean_lyrics(lyrics)
+    words = extract_words(lyrics)
+    word_counts = Counter(words)
+
+    stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+                 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+                 'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+                 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him',
+                 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our',
+                 'their', 'this', 'that', 'these', 'those', 'and', 'but',
+                 'or', 'so', 'if', 'then', 'than', 'when', 'where', 'what',
+                 'who', 'which', 'how', 'why', 'all', 'each', 'every', 'both',
+                 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'not',
+                 'only', 'own', 'same', 'just', 'can', 'now', 'to', 'of',
+                 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'up', 'about',
+                 'into', 'over', 'after', 'like', 'get', 'got', 'go', 'going',
+                 'gone', 'come', 'came', 'know', 'see', 'want', 'dont', "don't",
+                 'im', "i'm", 'ive', "i've", 'youre', "you're", 'its', "it's",
+                 'oh', 'yeah', 'ya', 'na', 'la', 'da', 'uh', 'ah', 'ooh', 'hey'}
+
+    themes = [word for word, _ in word_counts.most_common(50)
+              if word.lower() not in stopwords and len(word) > 2][:20]
+
+    return {
+        "artist": artist_name,
+        "album": song_name,  # Use song name as "album" for compatibility
+        "track_count": 1,
+        "tracks": [{"title": best_match["title"], "lyrics": lyrics}],
+        "vocabulary": list(set(words)),
+        "themes": themes
+    }
+
+
 def fetch_album_lyrics(artist_name: str, album_name: str) -> dict:
     """Fetch lyrics for songs from an album/artist.
     

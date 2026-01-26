@@ -9,7 +9,7 @@ echo "🚀 Song Remixer - Google Cloud Deployment"
 echo "=========================================="
 
 # Configuration
-PROJECT_ID="${GCLOUD_PROJECT_ID:-song-remixer}"
+PROJECT_ID="${GCLOUD_PROJECT_ID:-glassy-keyword-474117-j6}"
 REGION="${GCLOUD_REGION:-us-central1}"
 SERVICE_NAME="song-remixer"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
@@ -77,7 +77,7 @@ gcloud run deploy $SERVICE_NAME \
     --cpu 1 \
     --timeout 600 \
     --max-instances 10 \
-    --set-env-vars "FAST_MODE=true" \
+    --set-env-vars "AUDIO_MODE=suno,GCS_BUCKET=sound-remixer" \
     --set-secrets "REPLICATE_API_TOKEN=replicate-api-token:latest" \
     --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
     --set-secrets "GENIUS_ACCESS_TOKEN=genius-access-token:latest"

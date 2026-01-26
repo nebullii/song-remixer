@@ -5,9 +5,17 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from dotenv import load_dotenv
 
+try:
+    from google.cloud import storage
+except Exception:
+    storage = None
+
+from src.lyrics_fetcher import fetch_song_lyrics
 from src.remixer import generate_remixed_song
-from src.music_generator import generate_and_download
-from src.voice import guess_vocal_gender
+from src.quick_generator import generate_quick_song  # TTS + single instrumental (~1 min)
+from src.tts import generate_song_audio  # TTS only, no music (~5 sec)
+from src.music_generator import generate_and_download as music_generate  # Full Bark+MusicGen (~5 min)
+from src.suno_generator import generate_song_suno  # Suno: single API for everything (~30-60 sec)
 
 load_dotenv()
 
@@ -16,11 +24,32 @@ app = Flask(__name__)
 # Serve audio files from output directory
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+GCS_BUCKET = os.getenv("GCS_BUCKET", "sound-remixer")
+
+
+def upload_to_gcs(file_path: str, bucket_name: str) -> str | None:
+    if not bucket_name or storage is None:
+        return None
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob_name = os.path.basename(file_path)
+        blob = bucket.blob(blob_name)
+        blob.cache_control = "public, max-age=604800"
+        blob.upload_from_filename(file_path, content_type="audio/mpeg")
+        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+    except Exception as e:
+        print(f"GCS upload failed: {e}")
+        return None
 
 
 def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
-    """Parse user input to extract song, artist, optional style, and optional vocal gender."""
+    """Parse user input to extract song name, artist, optional style, and optional vocal gender."""
+    # Sanitize input - remove quotes and extra whitespace
     user_input = user_input.strip()
+    user_input = user_input.replace('"', '').replace("'", '').replace('"', '').replace('"', '')
+    user_input = re.sub(r'\s+', ' ', user_input)  # Normalize whitespace
+    
     style = "pop, catchy"
     vocal_gender = None
 
@@ -47,44 +76,22 @@ def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
     # Try different separators
     if " by " in user_input.lower():
         idx = user_input.lower().index(" by ")
-        album = user_input[:idx].strip()
+        song_name = user_input[:idx].strip()
         artist = user_input[idx + 4:].strip()
     elif " - " in user_input:
         parts = user_input.split(" - ", 1)
-        album = parts[0].strip()
+        song_name = parts[0].strip()
         artist = parts[1].strip()
     elif ": " in user_input:
         parts = user_input.split(": ", 1)
         artist = parts[0].strip()
-        album = parts[1].strip()
+        song_name = parts[1].strip()
     else:
         raise ValueError(
             "Please use format: 'Song by Artist' or 'Song - Artist'"
         )
 
-    return album, artist, style, vocal_gender
-
-
-def build_seed_song_data(song_title: str, artist: str, style: str) -> dict:
-    """Create minimal seed data when skipping lyrics fetch."""
-    seed_text = f"{song_title} {artist} {style}".lower()
-    words = re.findall(r"[a-z]+", seed_text)
-    stopwords = {
-        "the", "a", "an", "and", "or", "but", "if", "then", "than", "when",
-        "where", "what", "who", "which", "how", "why", "in", "on", "at", "by",
-        "for", "from", "to", "of", "with", "into", "over", "after", "before",
-        "is", "are", "was", "were", "be", "been", "being", "this", "that",
-    }
-    themes = [w for w in words if w not in stopwords][:20] or ["love", "night", "heart"]
-    vocabulary = list(set(words)) or themes
-    return {
-        "artist": artist,
-        "song": song_title,
-        "track_count": 1,
-        "tracks": [],
-        "vocabulary": vocabulary,
-        "themes": themes,
-    }
+    return song_name, artist, style, vocal_gender
 
 
 @app.route("/")
@@ -98,45 +105,94 @@ def remix():
     user_input = data.get("message", "")
 
     if not user_input:
-        return jsonify({"error": "Please enter an album name"}), 400
+        return jsonify({"error": "Please enter a song name"}), 400
 
     try:
         # Parse input
-        album, artist, style, vocal_gender_hint = parse_user_input(user_input)
+        song_name, artist, style, vocal_gender = parse_user_input(user_input)
 
-        # Build seed data (skip external lyrics fetching)
-        song_data = build_seed_song_data(album, artist, style)
+        # AUDIO_MODE: "suno" (fastest), "quick", "fast", or "full"
+        #   suno  = Single Suno API call, skips Genius+Claude (~30-60 sec)
+        #   quick = Edge TTS + single MusicGen instrumental (~1 min)
+        #   fast  = Edge TTS only, no music (~5 sec)
+        #   full  = Bark + MusicGen per section (~5+ min)
+        audio_mode = os.getenv("AUDIO_MODE", "suno").lower()
 
-        # Generate song
+        # Suno mode: single API, no Genius/Claude needed
+        if audio_mode == "suno":
+            print(f"Generating complete song with Suno (~30-60 sec)...")
+            result = generate_song_suno(
+                artist=artist,
+                album=song_name,
+                style=style,
+                output_dir=OUTPUT_DIR,
+            )
+            audio_filename = os.path.basename(result["audio_path"])
+            gcs_url = upload_to_gcs(result["audio_path"], GCS_BUCKET)
+            audio_url = gcs_url or f"/audio/{audio_filename}"
+
+            return jsonify({
+                "success": True,
+                "title": result["title"],
+                "mood": "generated",
+                "audio_url": audio_url,
+                "source_song": song_name,
+                "themes": [style]
+            })
+
+        # Other modes require Genius + Claude first
+        # Step 1: Fetch lyrics (single song)
+        print(f"Fetching lyrics for '{song_name} by {artist}'...")
+        song_data = fetch_song_lyrics(artist, song_name)
+
+        # Step 2: Generate new lyrics with Claude
+        print(f"Generating new song with Claude...")
         song = generate_remixed_song(song_data, style_hint=style)
 
-        # Decide vocal gender (heuristic + optional hint)
-        vocal_gender = guess_vocal_gender(artist, hint=vocal_gender_hint)
-
-        # Generate vocals + instrumental music (singing on beat)
-        audio_path = generate_and_download(
-            lyrics=song["lyrics"],
-            title=song["title"],
-            style=style,
-            mood=song["mood"],
-            vocal_gender=vocal_gender,
-            output_dir=OUTPUT_DIR,
-            singing_method="bark"  # Use Bark for actual singing vocals + instrumental
-        )
+        # Step 3: Generate audio
+        if audio_mode == "fast":
+            print(f"Generating with Edge TTS only (no music, ~5 sec)...")
+            audio_path = generate_song_audio(song, output_dir=OUTPUT_DIR)
+        elif audio_mode == "full":
+            print(f"Generating with Bark + MusicGen (slow, ~5 min)...")
+            audio_path = music_generate(
+                lyrics=song["lyrics"],
+                title=song["title"],
+                style=style,
+                mood=song["mood"],
+                vocal_gender=vocal_gender,
+                output_dir=OUTPUT_DIR,
+                add_harmonies=False,
+                add_intro_outro=False,
+            )
+        else:  # quick
+            print(f"Generating with Edge TTS + MusicGen (~1 min)...")
+            audio_path = generate_quick_song(
+                lyrics=song["lyrics"],
+                title=song["title"],
+                style=style,
+                mood=song["mood"],
+                output_dir=OUTPUT_DIR,
+            )
         audio_filename = os.path.basename(audio_path)
+        gcs_url = upload_to_gcs(audio_path, GCS_BUCKET)
+        audio_url = gcs_url or f"/audio/{audio_filename}"
 
         return jsonify({
             "success": True,
             "title": song["title"],
             "mood": song["mood"],
-            "audio_url": f"/audio/{audio_filename}",
-            "source_song": f"{song_data['song']} by {song_data['artist']}",
+            "audio_url": audio_url,
+            "source_song": song_data["tracks"][0]["title"] if song_data["tracks"] else song_name,
             "themes": song_data["themes"][:10]
         })
 
     except ValueError as e:
+        print(f"ValueError: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Something went wrong: {str(e)}"}), 500
 
 

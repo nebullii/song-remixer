@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Song Creator</title>
+    <title>Song Remixer</title>
     <style>
         * {
             margin: 0;
@@ -41,7 +42,7 @@
 
         .chat-container {
             flex: 1;
-            max-width: 800px;
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
             padding: 0 1rem;
@@ -59,15 +60,22 @@
         }
 
         .message {
-            max-width: 85%;
+            max-width: 100%;
             padding: 1rem 1.25rem;
             border-radius: 1rem;
             animation: fadeIn 0.3s ease;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message.user {
@@ -75,13 +83,15 @@
             background: #4a5568;
             color: white;
             border-bottom-right-radius: 0.25rem;
+            max-width: 85%;
         }
 
         .message.bot {
             align-self: flex-start;
-            background: #2d3748;
+            background: transparent;
             color: white;
             border-bottom-left-radius: 0.25rem;
+            width: 100%;
         }
 
         .message.bot.error {
@@ -120,6 +130,76 @@
             border-radius: 0.5rem;
         }
 
+        .audio-card {
+            margin-top: 1rem;
+            padding: 0.85rem;
+            border-radius: 0.75rem;
+            background: transparent;
+            border: none;
+            width: 50%;
+            max-width: 520px;
+        }
+
+        .audio-card audio {
+            margin-top: 0;
+            width: 100%;
+            min-height: 44px;
+        }
+
+        .audio-card audio::-webkit-media-controls-overflow-button {
+            display: none;
+        }
+
+        .audio-card audio::-webkit-media-controls-enclosure {
+            overflow: hidden;
+        }
+
+        .audio-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 0.75rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.65rem 1.1rem;
+            border-radius: 999px;
+            border: none;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            background: linear-gradient(90deg, #ff6b6b, #feca57);
+            color: #1a1a2e;
+        }
+
+        .btn.icon {
+            width: 46px;
+            height: 46px;
+            padding: 0;
+        }
+
+        .btn.icon svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+            pointer-events: none;
+        }
+
+        .btn.secondary {
+            background: #2d3748;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
         .typing {
             display: flex;
             gap: 0.3rem;
@@ -134,12 +214,25 @@
             animation: bounce 1.4s infinite ease-in-out;
         }
 
-        .typing span:nth-child(1) { animation-delay: -0.32s; }
-        .typing span:nth-child(2) { animation-delay: -0.16s; }
+        .typing span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
 
         @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
         }
 
         .input-area {
@@ -196,25 +289,34 @@
             font-size: 0.9rem;
             padding-bottom: 1rem;
         }
+
+        @media (max-width: 768px) {
+            .audio-card {
+                width: 100%;
+                max-width: none;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="header">
-        <h1>Song Creator</h1>
-        <p>Tell me a song and I'll create an original song inspired by it</p>
+        <h1>Song Remixer</h1>
+        <p>Tell me an album and I'll create an original song inspired by it</p>
     </div>
 
     <div class="chat-container">
         <div class="messages" id="messages">
             <div class="message bot">
-                Hey! Give me a song name and artist, and I'll create a brand new song inspired by it.<br><br>
-                <strong>Try:</strong> "Billie Jean by Michael Jackson" or "Bohemian Rhapsody - Queen"<br>
-                <em>Add a style or voice:</em> "Stairway to Heaven by Led Zeppelin (rock, epic)" or "Rolling in the Deep by Adele (female, soulful)"
+                Hey! Give me an album name and artist, and I'll create a brand new song inspired by it.<br><br>
+                <strong>Try:</strong> "Thriller by Michael Jackson" or "21 - Adele"<br>
+                <em>Add a style or voice:</em> "Abbey Road by The Beatles (psychedelic rock)" or "25 by Adele (female)"
             </div>
         </div>
 
         <div class="input-area">
-            <input type="text" id="userInput" placeholder="Enter song by artist (optional: style, female/male)..." autofocus>
+            <input type="text" id="userInput" placeholder="Enter album by artist (optional: style, female/male)..."
+                autofocus>
             <button id="sendBtn" onclick="sendMessage()">Create</button>
         </div>
         <p class="hint">Press Enter to send</p>
@@ -230,6 +332,38 @@
                 sendMessage();
             }
         });
+
+        async function downloadAudio(url, title) {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = title.replace(/[^a-z0-9]/gi, '_') + '.mp3';
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+            } catch (err) {
+                window.open(url, '_blank');
+            }
+        }
+
+        async function shareAudio(url, title) {
+            try {
+                if (navigator.share) {
+                    await navigator.share({ title, url });
+                    return;
+                }
+            } catch (err) {
+                // User cancelled or share failed
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+                alert('Link copied to clipboard.');
+            } else {
+                window.prompt('Copy this link:', url);
+            }
+        }
 
         function addMessage(content, isUser = false, isError = false) {
             const msg = document.createElement('div');
@@ -285,12 +419,27 @@
                     const content = `
                         <div class="title">${data.title}</div>
                         <div class="meta">
-                            Mood: ${data.mood} | Inspired by: ${data.source_song}<br>
-                            Themes: ${data.themes.join(', ')}
+                            Inspired by: ${data.source_song}<br>
+                            Style: ${data.themes.join(', ')}
                         </div>
-                        <audio controls autoplay>
-                            <source src="${data.audio_url}" type="audio/mpeg">
-                        </audio>
+                        <div class="audio-card">
+                            <audio controls autoplay controlsList="nodownload noplaybackrate noremoteplayback">
+                                <source src="${data.audio_url}" type="audio/mpeg">
+                            </audio>
+                            <div class="audio-actions">
+                                <button class="btn icon" type="button" onclick="downloadAudio('${data.audio_url}', '${data.title.replace(/'/g, "\\'")}')" aria-label="Download" title="Download">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4.01 4a1 1 0 0 1-1.38 0l-4.01-4a1 1 0 1 1 1.4-1.42L11 12.59V4a1 1 0 0 1 1-1z"></path>
+                                        <path d="M5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"></path>
+                                    </svg>
+                                </button>
+                                <button class="btn secondary icon" type="button" onclick="shareAudio('${data.audio_url}', '${data.title.replace(/'/g, "\\'")}')" aria-label="Share" title="Share">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M18 8a3 3 0 1 0-2.83-4H15a3 3 0 0 0 0 6 2.98 2.98 0 0 0 1.52-.42l-7.2 4.1A3 3 0 0 0 6 12a3 3 0 1 0 2.32 4.9l7.24 4.13A3 3 0 1 0 18 18a2.98 2.98 0 0 0-1.52.42l-7.2-4.1A2.98 2.98 0 0 0 9 12c0-.33-.05-.65-.14-.95l7.27-4.14A2.98 2.98 0 0 0 18 8z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
                     `;
                     addMessage(content);
                 }
@@ -306,4 +455,5 @@
         }
     </script>
 </body>
+
 </html>
