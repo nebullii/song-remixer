@@ -47,10 +47,8 @@ jobs:
             --cpu 1 \
             --timeout 600 \
             --max-instances 10 \
-            --set-env-vars "FAST_MODE=true" \
-            --set-env-vars "REPLICATE_API_TOKEN=${{ secrets.REPLICATE_API_TOKEN }}" \
-            --set-env-vars "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" \
-            --set-env-vars "GENIUS_ACCESS_TOKEN=${{ secrets.GENIUS_ACCESS_TOKEN }}"
+            --clear-env-vars \
+            --set-env-vars "AUDIO_MODE=suno,FAST_MODE=true,REPLICATE_API_TOKEN=${{ secrets.REPLICATE_API_TOKEN }},ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
       
       - name: Show deployment URL
         run: |
