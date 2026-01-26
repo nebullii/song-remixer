@@ -28,7 +28,13 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" &> /dev/n
     exit 1
 fi
 
-# Note: Using Secret Manager for API keys
+# Check for required secrets (Secret Manager)
+for secret in replicate-api-token anthropic-api-key genius-access-token; do
+    if ! gcloud secrets describe "$secret" >/dev/null 2>&1; then
+        echo "⚠️  Warning: Secret '$secret' not found in Secret Manager"
+        echo "You'll need to create it before the app can access that API"
+    fi
+done
 
 echo ""
 echo "📋 Deployment Configuration:"
@@ -72,8 +78,10 @@ gcloud run deploy $SERVICE_NAME \
     --timeout 600 \
     --max-instances 10 \
     --clear-env-vars \
-    --set-secrets "REPLICATE_API_TOKEN=REPLICATE_API_TOKEN:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest" \
-    --set-env-vars "AUDIO_MODE=suno"
+    --set-env-vars "AUDIO_MODE=suno" \
+    --set-secrets "REPLICATE_API_TOKEN=replicate-api-token:latest" \
+    --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
+    --set-secrets "GENIUS_ACCESS_TOKEN=genius-access-token:latest"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)')
@@ -83,7 +91,15 @@ echo "✅ Deployment successful!"
 echo "=========================================="
 echo "🌐 Your app is live at: $SERVICE_URL"
 echo ""
-echo "📝 Using: AUDIO_MODE=suno (Claude + MiniMax)"
+echo "📝 Next steps:"
+echo "1. If you didn't set API keys, add them in Cloud Console:"
+echo "   https://console.cloud.google.com/run/detail/$REGION/$SERVICE_NAME/variables"
 echo ""
-echo "Monitor logs: gcloud run logs tail $SERVICE_NAME --region $REGION"
+echo "2. Monitor logs:"
+echo "   gcloud run logs tail $SERVICE_NAME --region $REGION"
+echo ""
+echo "3. Update deployment:"
+echo "   ./deploy.sh"
+echo ""
+echo "💰 Cost estimate: Free tier includes 2M requests/month"
 echo "=========================================="
