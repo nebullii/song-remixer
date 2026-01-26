@@ -6,4 +6,3 @@ rich>=13.0.0
 flask>=3.0.0
 replicate>=1.0.0
 pydub>=0.25.0
-ffmpeg>=8.0.1_1
