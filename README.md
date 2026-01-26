@@ -1,69 +1,125 @@
 # Song Remixer
-https://song-remixer-vhgfezezza-uc.a.run.app
 
-Create an original pop song inspired by an album, then generate a vocal track and an instrumental track, and mix them together.
+AI-powered song generator that creates original songs with vocals and instrumentals, inspired by your favorite artists.
 
-## What it does
-- Fetches lyrics from Genius to extract themes and vocabulary.
-- Uses Anthropic to write a new, original song (structured verses/chorus/bridge).
-- Generates vocals with Edge TTS.
-- Generates instrumentals with Replicate (MusicGen) and mixes them with the vocals.
+**Live Demo:** https://song-remixer-1039646495017.us-central1.run.app/
 
-## Requirements
+## Features
+
+- **AI Lyrics Generation** - Creates original lyrics inspired by any artist's style
+- **Full Song Output** - Generates complete songs with vocals and instrumentals
+- **Multiple Audio Modes** - Choose between speed and quality
+- **Smart Caching** - Instant playback for repeated requests
+- **Web Interface** - Simple browser-based UI
+
+## How It Works
+
+```
+User Input → Claude AI → MiniMax Music → Complete Song
+     ↓           ↓             ↓
+"Song by     Generates     Full song with
+ Artist"     lyrics        vocals + music
+```
+
+## Audio Modes
+
+| Mode | Speed | Quality | APIs Used |
+|------|-------|---------|-----------|
+| `suno` (default) | ~30-60s | High | Claude + MiniMax |
+| `quick` | ~1 min | Medium | Genius + Claude + MusicGen |
+| `fast` | ~5s | Low | Genius + Claude + Edge TTS |
+| `full` | ~5 min | Highest | Genius + Claude + Bark + MusicGen |
+
+## Quick Start
+
+### Prerequisites
+
 - Python 3.10+
-- ffmpeg (required by pydub for MP3 read/write)
-  - macOS: `brew install ffmpeg`
-  - Ubuntu: `sudo apt-get install ffmpeg`
+- ffmpeg (for audio processing)
+  ```bash
+  # macOS
+  brew install ffmpeg
 
-## Setup
-```sh
+  # Ubuntu
+  sudo apt-get install ffmpeg
+  ```
+
+### Installation
+
+```bash
+git clone https://github.com/nebullii/song-remixer.git
+cd song-remixer
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Configuration
+
 Create a `.env` file:
+
 ```env
-GENIUS_ACCESS_TOKEN=your_genius_token_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
-REPLICATE_API_TOKEN=your_replicate_token_here
+ANTHROPIC_API_KEY=your_anthropic_key
+REPLICATE_API_TOKEN=your_replicate_token
+AUDIO_MODE=suno
 ```
 
-Notes:
-- `SUNO_COOKIE` appears in `.env.example` but is not used in the codebase.
-- `REPLICATE_MUSICGEN_MODEL` is optional; it defaults to the model ID in `src/music_generator.py`.
+Get your API keys:
+- [Anthropic Console](https://console.anthropic.com/) - For Claude AI
+- [Replicate](https://replicate.com/account/api-tokens) - For MiniMax Music
 
-## Run the web app
-```sh
+### Run
+
+```bash
 python app.py
 ```
-Open `http://localhost:5050`.
 
-Input format examples:
-- `Thriller by Michael Jackson`
-- `Rumours - Fleetwood Mac`
-- `Adele: 25 (80s synth, dreamy, female)`
+Open [http://localhost:5050](http://localhost:5050)
 
-The optional parentheses allow a style hint; if you include `male`, `female`, or `neutral`, it will bias the vocal gender.
+## Usage
 
-## Run the CLI
-```sh
-python -m src.main
+Enter a song and artist in any of these formats:
+
 ```
-Follow the prompt and provide input in the same format as above.
+Billie Jean by Michael Jackson
+Thriller - Michael Jackson
+Michael Jackson: Beat It
+```
 
-## Output
-Audio files are written to the `output/` directory.
+Add style hints in parentheses:
 
-## Project layout
-- `app.py` - Flask web app
-- `src/main.py` - CLI
-- `src/lyrics_fetcher.py` - Genius API + lyric scraping
-- `src/remixer.py` - Anthropic lyric generation
-- `src/tts.py` - Edge TTS vocals
-- `src/music_generator.py` - Replicate MusicGen + mixing
-- `src/voice.py` - Voice selection heuristics
+```
+Billie Jean by Michael Jackson (80s synth, energetic)
+Hello by Adele (acoustic, melancholic, female)
+```
 
-## Known limitations
-- Vocals and instrumentals are not tempo- or key-synced. Expect occasional mismatch.
-- Genius rate limits apply; fetching many tracks may be slow.
+## Project Structure
+
+```
+song-remixer/
+├── app.py                 # Flask web app
+├── deploy.sh              # Google Cloud Run deployment
+├── src/
+│   ├── suno_generator.py  # Claude + MiniMax pipeline
+│   ├── music_generator.py # MusicGen + Bark pipeline
+│   ├── lyrics_fetcher.py  # Genius API integration
+│   ├── remixer.py         # Claude lyrics generation
+│   └── tts.py             # Edge TTS vocals
+└── output/                # Generated audio files
+```
+
+## Deployment
+
+Deploy to Google Cloud Run:
+
+```bash
+./deploy.sh
+```
+
+Requires secrets in Google Secret Manager:
+- `replicate-api-token`
+- `anthropic-api-key`
+
+## License
+
+MIT
