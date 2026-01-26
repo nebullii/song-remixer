@@ -285,8 +285,8 @@
                     const content = `
                         <div class="title">${data.title}</div>
                         <div class="meta">
-                            Mood: ${data.mood} | Found ${data.tracks_found} tracks<br>
-                            Themes: ${data.themes.join(', ')}
+                            Inspired by: ${data.source_song}<br>
+                            Style: ${data.themes.join(', ')}
                         </div>
                         <audio controls autoplay>
                             <source src="${data.audio_url}" type="audio/mpeg">

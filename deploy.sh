@@ -77,7 +77,6 @@ gcloud run deploy $SERVICE_NAME \
     --cpu 1 \
     --timeout 600 \
     --max-instances 10 \
-    --clear-env-vars \
     --set-env-vars "AUDIO_MODE=suno" \
     --set-secrets "REPLICATE_API_TOKEN=replicate-api-token:latest" \
     --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
