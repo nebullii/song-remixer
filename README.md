@@ -2,6 +2,8 @@
 
 AI-powered song generator that creates original songs with vocals and instrumentals, inspired by your favorite artists.
 
+**Live Demo:** https://song-remixer-1039646495017.us-central1.run.app/
+
 ## Features
 
 - **AI Lyrics Generation** - Creates original lyrics inspired by any artist's style
