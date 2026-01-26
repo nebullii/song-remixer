@@ -59,8 +59,23 @@ def get_artist_songs(artist_name: str, max_songs: int = 50) -> list[dict]:
 
 def scrape_lyrics(song_url: str) -> str:
     """Scrape lyrics from a Genius song page."""
-    response = requests.get(song_url)
-    if response.status_code != 200:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    response = None
+    for _ in range(3):
+        response = requests.get(song_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            break
+        time.sleep(0.5)
+
+    if not response or response.status_code != 200:
         return ""
 
     soup = BeautifulSoup(response.text, "html.parser")
@@ -68,7 +83,10 @@ def scrape_lyrics(song_url: str) -> str:
     # Find lyrics containers
     lyrics_divs = soup.find_all("div", {"data-lyrics-container": "true"})
     if not lyrics_divs:
-        return ""
+        # Fallback for alternate layouts
+        lyrics_divs = soup.select("div.lyrics, div.lyrics-root")
+        if not lyrics_divs:
+            return ""
 
     lyrics_parts = []
     for div in lyrics_divs:
