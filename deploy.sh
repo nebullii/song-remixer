@@ -28,21 +28,7 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" &> /dev/n
     exit 1
 fi
 
-# Check for required environment variables
-if [ -z "$REPLICATE_API_TOKEN" ]; then
-    echo "⚠️  Warning: REPLICATE_API_TOKEN not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "⚠️  Warning: ANTHROPIC_API_KEY not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
-
-if [ -z "$GENIUS_ACCESS_TOKEN" ]; then
-    echo "⚠️  Warning: GENIUS_ACCESS_TOKEN not set"
-    echo "You'll need to set it in Cloud Run after deployment"
-fi
+# Note: Using Secret Manager for API keys
 
 echo ""
 echo "📋 Deployment Configuration:"
@@ -85,10 +71,9 @@ gcloud run deploy $SERVICE_NAME \
     --cpu 1 \
     --timeout 600 \
     --max-instances 10 \
-    --set-env-vars "FAST_MODE=true" \
-    --set-env-vars "REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}" \
-    --set-env-vars "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}" \
-    --set-env-vars "GENIUS_ACCESS_TOKEN=${GENIUS_ACCESS_TOKEN:-}"
+    --clear-env-vars \
+    --set-secrets "REPLICATE_API_TOKEN=REPLICATE_API_TOKEN:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest" \
+    --set-env-vars "AUDIO_MODE=suno"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)')
@@ -98,15 +83,7 @@ echo "✅ Deployment successful!"
 echo "=========================================="
 echo "🌐 Your app is live at: $SERVICE_URL"
 echo ""
-echo "📝 Next steps:"
-echo "1. If you didn't set API keys, add them in Cloud Console:"
-echo "   https://console.cloud.google.com/run/detail/$REGION/$SERVICE_NAME/variables"
+echo "📝 Using: AUDIO_MODE=suno (Claude + MiniMax)"
 echo ""
-echo "2. Monitor logs:"
-echo "   gcloud run logs tail $SERVICE_NAME --region $REGION"
-echo ""
-echo "3. Update deployment:"
-echo "   ./deploy.sh"
-echo ""
-echo "💰 Cost estimate: Free tier includes 2M requests/month"
+echo "Monitor logs: gcloud run logs tail $SERVICE_NAME --region $REGION"
 echo "=========================================="
