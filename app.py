@@ -10,6 +10,7 @@ from src.remixer import generate_remixed_song
 from src.quick_generator import generate_quick_song  # TTS + single instrumental (~1 min)
 from src.tts import generate_song_audio  # TTS only, no music (~5 sec)
 from src.music_generator import generate_and_download as music_generate  # Full Bark+MusicGen (~5 min)
+from src.suno_generator import generate_song_suno  # Suno: single API for everything (~30-60 sec)
 
 load_dotenv()
 
@@ -88,6 +89,34 @@ def remix():
         # Parse input
         song_name, artist, style, vocal_gender = parse_user_input(user_input)
 
+        # AUDIO_MODE: "suno" (fastest), "quick", "fast", or "full"
+        #   suno  = Single Suno API call, skips Genius+Claude (~30-60 sec)
+        #   quick = Edge TTS + single MusicGen instrumental (~1 min)
+        #   fast  = Edge TTS only, no music (~5 sec)
+        #   full  = Bark + MusicGen per section (~5+ min)
+        audio_mode = os.getenv("AUDIO_MODE", "suno").lower()
+
+        # Suno mode: single API, no Genius/Claude needed
+        if audio_mode == "suno":
+            print(f"Generating complete song with Suno (~30-60 sec)...")
+            result = generate_song_suno(
+                artist=artist,
+                album=song_name,
+                style=style,
+                output_dir=OUTPUT_DIR,
+            )
+            audio_filename = os.path.basename(result["audio_path"])
+
+            return jsonify({
+                "success": True,
+                "title": result["title"],
+                "mood": "generated",
+                "audio_url": f"/audio/{audio_filename}",
+                "source_song": song_name,
+                "themes": [style]
+            })
+
+        # Other modes require Genius + Claude first
         # Step 1: Fetch lyrics (single song)
         print(f"Fetching lyrics for '{song_name} by {artist}'...")
         song_data = fetch_song_lyrics(artist, song_name)
@@ -97,12 +126,6 @@ def remix():
         song = generate_remixed_song(song_data, style_hint=style)
 
         # Step 3: Generate audio
-        # AUDIO_MODE: "quick" (default), "fast", or "full"
-        #   quick = Edge TTS + single MusicGen instrumental (~1 min)
-        #   fast  = Edge TTS only, no music (~5 sec)
-        #   full  = Bark + MusicGen per section (~5+ min)
-        audio_mode = os.getenv("AUDIO_MODE", "quick").lower()
-
         if audio_mode == "fast":
             print(f"Generating with Edge TTS only (no music, ~5 sec)...")
             audio_path = generate_song_audio(song, output_dir=OUTPUT_DIR)
@@ -118,7 +141,7 @@ def remix():
                 add_harmonies=False,
                 add_intro_outro=False,
             )
-        else:  # quick (default)
+        else:  # quick
             print(f"Generating with Edge TTS + MusicGen (~1 min)...")
             audio_path = generate_quick_song(
                 lyrics=song["lyrics"],
