@@ -5,6 +5,11 @@ import re
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from dotenv import load_dotenv
 
+try:
+    from google.cloud import storage
+except Exception:
+    storage = None
+
 from src.lyrics_fetcher import fetch_song_lyrics
 from src.remixer import generate_remixed_song
 from src.quick_generator import generate_quick_song  # TTS + single instrumental (~1 min)
@@ -19,6 +24,23 @@ app = Flask(__name__)
 # Serve audio files from output directory
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+GCS_BUCKET = os.getenv("GCS_BUCKET", "sound-remixer")
+
+
+def upload_to_gcs(file_path: str, bucket_name: str) -> str | None:
+    if not bucket_name or storage is None:
+        return None
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob_name = os.path.basename(file_path)
+        blob = bucket.blob(blob_name)
+        blob.cache_control = "public, max-age=604800"
+        blob.upload_from_filename(file_path, content_type="audio/mpeg")
+        return f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+    except Exception as e:
+        print(f"GCS upload failed: {e}")
+        return None
 
 
 def parse_user_input(user_input: str) -> tuple[str, str, str, str | None]:
@@ -106,12 +128,14 @@ def remix():
                 output_dir=OUTPUT_DIR,
             )
             audio_filename = os.path.basename(result["audio_path"])
+            gcs_url = upload_to_gcs(result["audio_path"], GCS_BUCKET)
+            audio_url = gcs_url or f"/audio/{audio_filename}"
 
             return jsonify({
                 "success": True,
                 "title": result["title"],
                 "mood": "generated",
-                "audio_url": f"/audio/{audio_filename}",
+                "audio_url": audio_url,
                 "source_song": song_name,
                 "themes": [style]
             })
@@ -151,12 +175,14 @@ def remix():
                 output_dir=OUTPUT_DIR,
             )
         audio_filename = os.path.basename(audio_path)
+        gcs_url = upload_to_gcs(audio_path, GCS_BUCKET)
+        audio_url = gcs_url or f"/audio/{audio_filename}"
 
         return jsonify({
             "success": True,
             "title": song["title"],
             "mood": song["mood"],
-            "audio_url": f"/audio/{audio_filename}",
+            "audio_url": audio_url,
             "source_song": song_data["tracks"][0]["title"] if song_data["tracks"] else song_name,
             "themes": song_data["themes"][:10]
         })
