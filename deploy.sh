@@ -9,7 +9,7 @@ echo "🚀 Song Remixer - Google Cloud Deployment"
 echo "=========================================="
 
 # Configuration
-PROJECT_ID="${GCLOUD_PROJECT_ID:-song-remixer}"
+PROJECT_ID="${GCLOUD_PROJECT_ID:-glassy-keyword-474117-j6}"
 REGION="${GCLOUD_REGION:-us-central1}"
 SERVICE_NAME="song-remixer"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
