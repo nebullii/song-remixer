@@ -12,30 +12,44 @@ def get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-def generate_remixed_song(album_data: dict, style_hint: str = None) -> dict:
+def generate_remixed_song(song_data: dict, style_hint: str = None) -> dict:
     """
-    Generate an original song inspired by the album's vocabulary and themes.
+    Generate an original song inspired by the source song's vocabulary and themes.
+
+    Args:
+        song_data: Dict containing themes, vocabulary, artist, and album/song info
+        style_hint: Optional genre/style override (e.g., "rock", "hip-hop", "country")
     """
     client = get_client()
 
-    themes = ", ".join(album_data["themes"][:20])
-    vocab_sample = ", ".join(album_data["vocabulary"][:50])
-    track_titles = [t["title"] for t in album_data["tracks"]]
+    themes = ", ".join(song_data["themes"][:20])
+    vocab_sample = ", ".join(song_data["vocabulary"][:50])
 
-    style_instruction = f"\nStyle hint: {style_hint}" if style_hint else ""
+    # Handle both single song and album data structures
+    source_name = song_data.get("song") or song_data.get("album", "Unknown")
+    artist_name = song_data["artist"]
 
-    prompt = f"""You are a professional songwriter writing lyrics for a POP SONG (not a poem). Create an ORIGINAL song inspired by "{album_data['album']}" by {album_data['artist']}.
+    # Build style context - either from hint or infer from artist
+    if style_hint:
+        genre_style = style_hint
+        style_instruction = f"Write in a {style_hint} style."
+    else:
+        genre_style = "the same genre and style"
+        style_instruction = f"Match the musical style and genre typically associated with {artist_name}."
 
-Key themes: {themes}
+    prompt = f"""You are a professional songwriter. Create an ORIGINAL song inspired by "{source_name}" by {artist_name}.
+
+STYLE: {style_instruction} Analyze {artist_name}'s typical musical characteristics (tempo, mood, lyrical approach, genre conventions) and reflect them in your song.
+
+Key themes from the source: {themes}
 Sample vocabulary: {vocab_sample}
-{style_instruction}
 
 CRITICAL SONG STRUCTURE REQUIREMENTS:
 1. Write a SONG, not a poem. Songs have:
    - A catchy, memorable CHORUS that repeats 2-3 times (this is the hook!)
-   - Short, punchy lines (4-8 words per line typically)
+   - Short, punchy lines appropriate for the genre
    - Repetition of key phrases and the title
-   - Rhythm that can be sung to a beat
+   - Rhythm that fits {genre_style}
 
 2. Use this EXACT structure:
    [Verse 1] - 4-6 lines, sets up the story
@@ -49,9 +63,9 @@ CRITICAL SONG STRUCTURE REQUIREMENTS:
    - Be the same lyrics each time it appears
    - Include the song title
    - Be catchy and memorable
-   - Use simple, singable words
+   - Use words that fit the genre
 
-4. Keep lines SHORT and rhythmic. Think radio pop songs, not Shakespeare.
+4. Match the VIBE of {artist_name} - their typical themes, word choices, and emotional tone.
 
 Format your response EXACTLY as:
 TITLE: [Your catchy song title]
